@@ -15,6 +15,20 @@
       "when": 1773508149356,
       "tag": "0001_absurd_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773509002048,
+      "tag": "0002_warm_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773510782301,
+      "tag": "0003_minor_songbird",
+      "breakpoints": true
     }
   ]
 }
