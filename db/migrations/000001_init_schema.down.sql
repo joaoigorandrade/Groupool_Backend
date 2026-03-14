@@ -1,9 +1,0 @@
-DROP TABLE IF EXISTS withdrawal_requests;
-DROP TABLE IF EXISTS votes;
-DROP TABLE IF EXISTS transactions;
-DROP TABLE IF EXISTS challenge_participants;
-DROP TABLE IF EXISTS challenges;
-DROP TABLE IF EXISTS group_members;
-DROP TABLE IF EXISTS groups;
-DROP TABLE IF EXISTS users;
-DROP EXTENSION IF EXISTS "uuid-ossp";
