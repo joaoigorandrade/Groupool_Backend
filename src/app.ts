@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
+import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
 
 export function buildApp() {
@@ -50,6 +51,7 @@ export function buildApp() {
   });
 
   app.register(healthRoutes);
+  app.register(groupRoutes);
 
   return app;
 }
