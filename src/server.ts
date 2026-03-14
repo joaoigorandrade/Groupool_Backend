@@ -10,9 +10,14 @@ const start = async () => {
       host: "0.0.0.0",
     });
 
-    app.log.info(`Server running on port ${env.PORT}`);
+    app.log.info({
+      message: "Server started",
+      port: env.PORT,
+      environment: env.APP_ENV,
+      version: env.APP_VERSION,
+    });
   } catch (error) {
-    app.log.error(error);
+    app.log.error({ err: error }, "Failed to start server");
     process.exit(1);
   }
 };

@@ -3,14 +3,21 @@ import { env } from "../config/env.js";
 import { sql } from "../db/index.js";
 
 export async function healthRoutes(app: FastifyInstance) {
-  app.get("/health", async () => {
+  app.get("/health", async (request) => {
     let database: "connected" | "disconnected" = "connected";
 
     try {
       await sql`select 1`;
     } catch (error) {
       database = "disconnected";
-      app.log.error(error, "Database connectivity check failed");
+
+      request.log.error(
+        {
+          err: error,
+          requestId: request.id,
+        },
+        "Database connectivity check failed",
+      );
     }
 
     return {
