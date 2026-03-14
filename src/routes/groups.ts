@@ -77,6 +77,10 @@ export async function groupRoutes(app: FastifyInstance) {
         })
         .returning();
 
+      if (!group) {
+        throw new Error("Failed to create group");
+      }
+
       const [creatorMember] = await tx
         .insert(groupMembers)
         .values({
@@ -87,6 +91,10 @@ export async function groupRoutes(app: FastifyInstance) {
           status: "active",
         })
         .returning();
+
+      if (!creatorMember) {
+        throw new Error("Failed to create creator member");
+      }
 
       if (typeof idempotencyKey === "string" && idempotencyKey.length > 0) {
         await tx.insert(idempotencyKeys).values({
