@@ -18,6 +18,10 @@ const groupParamsSchema = z.object({
   groupId: z.uuid(),
 });
 
+const updateGroupBodySchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+});
+
 type GroupRecord = typeof groups.$inferSelect;
 type GroupMemberRecord = typeof groupMembers.$inferSelect;
 
@@ -139,5 +143,56 @@ export async function groupRoutes(app: FastifyInstance) {
       .where(eq(groupMembers.groupId, group.id));
 
     return toGroupResponse(group, members);
+  });
+
+  app.patch("/groups/:groupId", {
+    preHandler: [authenticate, requireGroupMember],
+  }, async (request, reply) => {
+    const params = groupParamsSchema.parse(request.params);
+    const body = updateGroupBodySchema.parse(request.body);
+
+    if (request.groupMember?.role !== "owner") {
+      return reply.status(403).send({
+        error: "forbidden",
+        message: "Only the group owner can update the group",
+      });
+    }
+
+    if (!body.name) {
+      // Nothing to update — return current group
+      const [group] = await db
+        .select()
+        .from(groups)
+        .where(eq(groups.id, params.groupId))
+        .limit(1);
+
+      if (!group) {
+        return reply.status(404).send({ error: "not_found", message: "Group not found" });
+      }
+
+      const members = await db
+        .select()
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, group.id));
+
+      return reply.status(200).send(toGroupResponse(group, members));
+    }
+
+    const [updated] = await db
+      .update(groups)
+      .set({ name: body.name })
+      .where(eq(groups.id, params.groupId))
+      .returning();
+
+    if (!updated) {
+      return reply.status(404).send({ error: "not_found", message: "Group not found" });
+    }
+
+    const members = await db
+      .select()
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, updated.id));
+
+    return reply.status(200).send(toGroupResponse(updated, members));
   });
 }
