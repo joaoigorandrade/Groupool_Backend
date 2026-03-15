@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
@@ -49,6 +50,13 @@ export function buildApp() {
       error: "not_found",
       message: "Route not found",
     });
+  });
+
+  app.register(cors, {
+    origin:
+      env.NODE_ENV === "development"
+        ? [env.CORS_ORIGIN, "http://localhost:3000", "http://localhost:8080"]
+        : env.CORS_ORIGIN,
   });
 
   app.register(homeRoutes);
