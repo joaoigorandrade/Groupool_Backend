@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { groupMembers, groups, idempotencyKeys } from "../db/schema.js";
+import { authenticate } from "../middleware/auth.js";
+import { requireGroupMember } from "../middleware/requireGroupMember.js";
 
 const createGroupBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -13,7 +15,7 @@ const createGroupBodySchema = z.object({
 });
 
 const groupParamsSchema = z.object({
-  id: z.uuid(),
+  groupId: z.uuid(),
 });
 
 type GroupRecord = typeof groups.$inferSelect;
@@ -113,13 +115,15 @@ export async function groupRoutes(app: FastifyInstance) {
     return reply.status(201).send(toGroupResponse(result.group, result.members));
   });
 
-  app.get("/groups/:id", async (request, reply) => {
+  app.get("/groups/:groupId", {
+    preHandler: [authenticate, requireGroupMember],
+  }, async (request, reply) => {
     const params = groupParamsSchema.parse(request.params);
 
     const [group] = await db
       .select()
       .from(groups)
-      .where(eq(groups.id, params.id))
+      .where(eq(groups.id, params.groupId))
       .limit(1);
 
     if (!group) {
