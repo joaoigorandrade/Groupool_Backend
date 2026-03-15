@@ -1,7 +1,25 @@
 import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
+import { sql } from "./db/index.js";
 
 const app = buildApp();
+
+const shutdown = async (signal: string) => {
+  app.log.info({ signal }, "Shutdown signal received");
+  try {
+    await app.close();
+    app.log.info("Fastify server closed");
+    await sql.end();
+    app.log.info("Postgres connection closed");
+    process.exit(0);
+  } catch (error) {
+    app.log.error({ err: error }, "Error during shutdown");
+    process.exit(1);
+  }
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 const start = async () => {
   try {

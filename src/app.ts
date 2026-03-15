@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { env } from "./config/env.js";
 import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
+import { homeRoutes } from "./routes/home.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -50,8 +51,9 @@ export function buildApp() {
     });
   });
 
+  app.register(homeRoutes);
   app.register(healthRoutes);
-  app.register(groupRoutes);
+  app.register(groupRoutes, { prefix: "/v1" });
 
   return app;
 }

@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { env } from "../config/env.js";
 
 const sql = postgres(env.DATABASE_URL, {
-  max: 1,
+  max: env.DB_POOL_MAX,
   ssl: "require",
 });
 

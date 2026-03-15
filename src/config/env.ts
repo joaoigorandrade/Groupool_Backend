@@ -9,6 +9,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive(),
   APP_VERSION: z.string().min(1),
   DATABASE_URL: z.url(),
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  JWT_SECRET: z.string().min(32),
+  WHATSAPP_TOKEN: z.string().min(1),
+  WHATSAPP_PHONE_ID: z.string().min(1),
+  TWILIO_ACCOUNT_SID: z.string().min(1),
+  TWILIO_AUTH_TOKEN: z.string().min(1),
+  TWILIO_FROM_NUMBER: z.string(),
 });
 
 const parsed = envSchema.safeParse(process.env);

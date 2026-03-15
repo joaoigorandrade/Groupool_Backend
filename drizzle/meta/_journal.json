@@ -29,6 +29,20 @@
       "when": 1773510782301,
       "tag": "0003_minor_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773527056797,
+      "tag": "0004_robust_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773527257437,
+      "tag": "0005_equal_mister_sinister",
+      "breakpoints": true
     }
   ]
 }

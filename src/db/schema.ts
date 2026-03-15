@@ -1,5 +1,7 @@
 import {
+  boolean,
   check,
+  index,
   integer,
   pgTable,
   text,
@@ -52,3 +54,38 @@ export const groupMembers = pgTable(
     check("group_members_status_check", sql`${table.status} in ('active', 'invited', 'removed')`),
   ],
 );
+
+export const otpCodes = pgTable(
+  "otp_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    phone: text("phone").notNull(),
+    code: text("code").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    used: boolean("used").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("otp_codes_phone_idx").on(table.phone),
+  ],
+);
+
+export const otpRequests = pgTable(
+  "otp_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    phone: text("phone").notNull(),
+    ip: text("ip").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("otp_requests_phone_created_at_idx").on(table.phone, table.createdAt),
+    index("otp_requests_ip_created_at_idx").on(table.ip, table.createdAt),
+  ],
+);
+
+export const otpLocks = pgTable("otp_locks", {
+  phone: text("phone").primaryKey(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
+  failCount: integer("fail_count").notNull().default(0),
+});
