@@ -38,7 +38,7 @@ function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
 }
 
 export async function groupRoutes(app: FastifyInstance) {
-  app.post("/groups", async (request, reply) => {
+  app.post("/groups", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = createGroupBodySchema.parse(request.body);
     const idempotencyKey = request.headers["idempotency-key"];
 

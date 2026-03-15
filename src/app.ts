@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
+import Fastify, { FastifyError } from "fastify";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
 import { groupRoutes } from "./routes/groups.js";
@@ -12,7 +13,7 @@ export function buildApp() {
     genReqId: () => crypto.randomUUID(),
   });
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error(
       {
         err: error,
@@ -22,6 +23,13 @@ export function buildApp() {
       },
       "Request failed",
     );
+
+    if (error.statusCode === 429) {
+      return reply.status(429).send({
+        error: "rate_limit_exceeded",
+        message: error.message,
+      });
+    }
 
     if (error instanceof ZodError) {
       return reply.status(400).send({
@@ -50,6 +58,11 @@ export function buildApp() {
       error: "not_found",
       message: "Route not found",
     });
+  });
+
+  app.register(rateLimit, {
+    max: 100,
+    timeWindow: "1 minute",
   });
 
   app.register(cors, {
