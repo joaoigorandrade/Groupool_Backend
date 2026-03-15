@@ -3,6 +3,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { FastifyError } from "fastify";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
+import { authenticate } from "./middleware/auth.js";
 import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
 import { homeRoutes } from "./routes/home.js";
@@ -72,9 +73,16 @@ export function buildApp() {
         : env.CORS_ORIGIN,
   });
 
+  app.decorateRequest("user", null);
+
   app.register(homeRoutes);
   app.register(healthRoutes);
-  app.register(groupRoutes, { prefix: "/v1" });
+  app.register(
+    async (protectedApp) => {
+      protectedApp.addHook("preHandler", authenticate);
+      protectedApp.register(groupRoutes, { prefix: "/v1" });
+    },
+  );
 
   return app;
 }
