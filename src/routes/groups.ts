@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { groupMembers, groups, idempotencyKeys } from "../db/schema.js";
@@ -21,6 +21,28 @@ const groupParamsSchema = z.object({
 const updateGroupBodySchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
 });
+
+const listGroupsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().optional(),
+});
+
+interface GroupCursor {
+  createdAt: string;
+  id: string;
+}
+
+function encodeCursor(createdAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString("base64url");
+}
+
+function decodeCursor(cursor: string): GroupCursor {
+  try {
+    return JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as GroupCursor;
+  } catch {
+    throw new Error("Invalid cursor");
+  }
+}
 
 type GroupRecord = typeof groups.$inferSelect;
 type GroupMemberRecord = typeof groupMembers.$inferSelect;
@@ -44,6 +66,51 @@ function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
 }
 
 export async function groupRoutes(app: FastifyInstance) {
+  app.get("/groups", { preHandler: [authenticate] }, async (request, reply) => {
+    const { limit, cursor } = listGroupsQuerySchema.parse(request.query);
+    const userId = request.user!.userId;
+
+    let cursorCondition;
+    if (cursor) {
+      let parsed: GroupCursor;
+      try {
+        parsed = decodeCursor(cursor);
+      } catch {
+        return reply.status(400).send({ error: "bad_request", message: "Invalid cursor" });
+      }
+      const cursorDate = new Date(parsed.createdAt);
+      cursorCondition = or(
+        gt(groups.createdAt, cursorDate),
+        and(eq(groups.createdAt, cursorDate), gt(groups.id, parsed.id)),
+      );
+    }
+
+    const membershipCondition = and(
+      eq(groupMembers.externalUserId, userId),
+      eq(groupMembers.status, "active"),
+    );
+
+    const rows = await db
+      .select({
+        id: groups.id,
+        name: groups.name,
+        currency: groups.currency,
+        initialPoolCents: groups.initialPoolCents,
+        createdAt: groups.createdAt,
+      })
+      .from(groups)
+      .innerJoin(groupMembers, eq(groupMembers.groupId, groups.id))
+      .where(cursorCondition ? and(membershipCondition, cursorCondition) : membershipCondition)
+      .orderBy(asc(groups.createdAt), asc(groups.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? encodeCursor(data[data.length - 1]!.createdAt, data[data.length - 1]!.id) : null;
+
+    return reply.status(200).send({ data, cursor: nextCursor });
+  });
+
   app.post("/groups", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = createGroupBodySchema.parse(request.body);
     const idempotencyKey = request.headers["idempotency-key"];
