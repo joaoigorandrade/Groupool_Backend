@@ -10,6 +10,10 @@ const memberParamsSchema = z.object({
   groupId: z.uuid(),
 });
 
+const groupIdParamsSchema = z.object({
+  id: z.uuid(),
+});
+
 const inviteMemberBodySchema = z.object({
   externalUserId: z.string().trim().min(1).max(120),
   displayName: z.string().trim().min(1).max(80),
@@ -60,6 +64,44 @@ export async function memberRoutes(app: FastifyInstance) {
         role: member!.role,
         status: member!.status,
         joinedAt: member!.joinedAt,
+      });
+    },
+  );
+
+  app.post(
+    "/groups/:id/members/accept",
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const { id: groupId } = groupIdParamsSchema.parse(request.params);
+      const userId = request.user!.userId;
+
+      const [updated] = await db
+        .update(groupMembers)
+        .set({ status: "active" })
+        .where(
+          and(
+            eq(groupMembers.groupId, groupId),
+            eq(groupMembers.externalUserId, userId),
+            eq(groupMembers.status, "invited"),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        return reply.status(404).send({
+          error: "not_found",
+          message: "No pending invite found for this user in the group",
+        });
+      }
+
+      return reply.status(200).send({
+        id: updated.id,
+        groupId: updated.groupId,
+        externalUserId: updated.externalUserId,
+        displayName: updated.displayName,
+        role: updated.role,
+        status: updated.status,
+        joinedAt: updated.joinedAt,
       });
     },
   );
