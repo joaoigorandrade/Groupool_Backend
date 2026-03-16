@@ -7,6 +7,7 @@ import { authenticate } from "./middleware/auth.js";
 import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
 import { homeRoutes } from "./routes/home.js";
+import { memberRoutes } from "./routes/members.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -81,6 +82,7 @@ export function buildApp() {
     async (protectedApp) => {
       protectedApp.addHook("preHandler", authenticate);
       protectedApp.register(groupRoutes, { prefix: "/v1" });
+      protectedApp.register(memberRoutes, { prefix: "/v1" });
     },
   );
 
