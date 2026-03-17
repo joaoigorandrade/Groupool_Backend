@@ -10,7 +10,6 @@ const createGroupBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   currency: z.literal("BRL"),
   initialPoolCents: z.number().int().min(0),
-  creatorExternalId: z.string().trim().min(1).max(120),
   creatorDisplayName: z.string().trim().min(1).max(80),
 });
 
@@ -111,8 +110,9 @@ export async function groupRoutes(app: FastifyInstance) {
     return reply.status(200).send({ data, cursor: nextCursor });
   });
 
-  app.post("/groups", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.post("/groups", { preHandler: [authenticate], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = createGroupBodySchema.parse(request.body);
+    const creatorExternalId = request.user!.userId;
     const idempotencyKey = request.headers["idempotency-key"];
 
     if (typeof idempotencyKey === "string" && idempotencyKey.length > 0) {
@@ -158,7 +158,7 @@ export async function groupRoutes(app: FastifyInstance) {
         .insert(groupMembers)
         .values({
           groupId: group.id,
-          externalUserId: body.creatorExternalId.trim(),
+          externalUserId: creatorExternalId,
           displayName: body.creatorDisplayName.trim(),
           role: "owner",
           status: "active",
