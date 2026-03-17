@@ -111,3 +111,27 @@ export const pools = pgTable(
     index("pools_group_id_idx").on(table.groupId),
   ],
 );
+
+export const contributions = pgTable(
+  "contributions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    poolId: uuid("pool_id")
+      .notNull()
+      .references(() => pools.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => groupMembers.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    status: text("status").notNull().default("pending"),
+    pixTransactionId: text("pix_transaction_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  },
+  (table) => [
+    check("contributions_amount_cents_check", sql`${table.amountCents} > 0`),
+    check("contributions_status_check", sql`${table.status} in ('pending', 'confirmed', 'failed')`),
+    index("contributions_pool_id_idx").on(table.poolId),
+    index("contributions_member_id_idx").on(table.memberId),
+  ],
+);
