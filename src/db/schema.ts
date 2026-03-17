@@ -89,3 +89,25 @@ export const otpLocks = pgTable("otp_locks", {
   lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
   failCount: integer("fail_count").notNull().default(0),
 });
+
+export const pools = pgTable(
+  "pools",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    targetCents: integer("target_cents").notNull(),
+    collectedCents: integer("collected_cents").notNull().default(0),
+    status: text("status").notNull().default("open"),
+    deadline: timestamp("deadline", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("pools_target_cents_check", sql`${table.targetCents} > 0`),
+    check("pools_collected_cents_check", sql`${table.collectedCents} >= 0`),
+    check("pools_status_check", sql`${table.status} in ('open', 'closed', 'cancelled')`),
+    index("pools_group_id_idx").on(table.groupId),
+  ],
+);

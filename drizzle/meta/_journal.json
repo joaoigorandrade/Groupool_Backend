@@ -43,6 +43,13 @@
       "when": 1773527257437,
       "tag": "0005_equal_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773710958491,
+      "tag": "0006_natural_wrecker",
+      "breakpoints": true
     }
   ]
 }
