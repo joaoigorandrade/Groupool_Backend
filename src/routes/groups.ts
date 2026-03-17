@@ -212,6 +212,30 @@ export async function groupRoutes(app: FastifyInstance) {
     return toGroupResponse(group, members);
   });
 
+  app.delete("/groups/:groupId", {
+    preHandler: [authenticate, requireGroupMember],
+  }, async (request, reply) => {
+    const params = groupParamsSchema.parse(request.params);
+
+    if (request.groupMember?.role !== "owner") {
+      return reply.status(403).send({
+        error: "forbidden",
+        message: "Only the group owner can delete the group",
+      });
+    }
+
+    const deleted = await db
+      .delete(groups)
+      .where(eq(groups.id, params.groupId))
+      .returning({ id: groups.id });
+
+    if (deleted.length === 0) {
+      return reply.status(404).send({ error: "not_found", message: "Group not found" });
+    }
+
+    return reply.status(204).send();
+  });
+
   app.patch("/groups/:groupId", {
     preHandler: [authenticate, requireGroupMember],
   }, async (request, reply) => {
