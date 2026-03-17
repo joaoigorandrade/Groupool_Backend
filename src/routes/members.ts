@@ -14,6 +14,11 @@ const groupIdParamsSchema = z.object({
   id: z.uuid(),
 });
 
+const removeMemberParamsSchema = z.object({
+  id: z.uuid(),
+  memberId: z.uuid(),
+});
+
 const inviteMemberBodySchema = z.object({
   externalUserId: z.string().trim().min(1).max(120),
   displayName: z.string().trim().min(1).max(80),
@@ -103,6 +108,59 @@ export async function memberRoutes(app: FastifyInstance) {
         status: updated.status,
         joinedAt: updated.joinedAt,
       });
+    },
+  );
+
+  app.delete(
+    "/groups/:id/members/:memberId",
+    { preHandler: [authenticate, requireGroupMember] },
+    async (request, reply) => {
+      const { id: groupId, memberId } = removeMemberParamsSchema.parse(request.params);
+      const requesterId = request.user!.userId;
+      const requesterMember = request.groupMember!;
+
+      const [target] = await db
+        .select()
+        .from(groupMembers)
+        .where(
+          and(
+            eq(groupMembers.id, memberId),
+            eq(groupMembers.groupId, groupId),
+            eq(groupMembers.status, "active"),
+          ),
+        )
+        .limit(1);
+
+      if (!target) {
+        return reply.status(404).send({
+          error: "not_found",
+          message: "Member not found in this group",
+        });
+      }
+
+      const isOwner = requesterMember.role === "owner";
+      const isRemovingSelf = target.externalUserId === requesterId;
+
+      if (!isOwner && !isRemovingSelf) {
+        return reply.status(403).send({
+          error: "forbidden",
+          message: "You are not allowed to remove this member",
+        });
+      }
+
+      if (isOwner && isRemovingSelf) {
+        return reply.status(403).send({
+          error: "forbidden",
+          message: "Owner cannot remove themselves; delete the group instead",
+        });
+      }
+
+      await db
+        .update(groupMembers)
+        .set({ status: "removed" })
+        .where(eq(groupMembers.id, memberId));
+
+      return reply.status(204).send();
     },
   );
 }

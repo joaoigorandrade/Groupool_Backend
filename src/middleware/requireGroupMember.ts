@@ -23,7 +23,8 @@ export async function requireGroupMember(
     });
   }
 
-  const { groupId } = request.params as { groupId?: string };
+  const params = request.params as { groupId?: string; id?: string };
+  const groupId = params.groupId ?? params.id;
   if (!groupId) {
     return reply.status(400).send({
       error: "bad_request",
