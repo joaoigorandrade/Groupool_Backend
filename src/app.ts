@@ -8,6 +8,7 @@ import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
 import { homeRoutes } from "./routes/home.js";
 import { memberRoutes } from "./routes/members.js";
+import { poolRoutes } from "./routes/pools.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -83,6 +84,7 @@ export function buildApp() {
       protectedApp.addHook("preHandler", authenticate);
       protectedApp.register(groupRoutes, { prefix: "/v1" });
       protectedApp.register(memberRoutes, { prefix: "/v1" });
+      protectedApp.register(poolRoutes, { prefix: "/v1" });
     },
   );
 
