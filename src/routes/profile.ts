@@ -6,7 +6,7 @@ import { groupMembers } from "../db/schema.js";
 
 const patchProfileBodySchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
-  avatarURL: z.string().url().optional(),
+  avatarURL: z.string().trim().min(1).optional(),
 });
 
 interface ProfileResponse {
@@ -28,6 +28,9 @@ export async function buildProfileForUser(
     .select({
       id: groupMembers.id,
       displayName: groupMembers.displayName,
+      avatarURL: groupMembers.avatarUrl,
+      reputation: groupMembers.reputation,
+      reliabilityPercent: groupMembers.reliabilityPercent,
       status: groupMembers.status,
       role: groupMembers.role,
     })
@@ -55,9 +58,9 @@ export async function buildProfileForUser(
     id: userId,
     displayName: profileSource.displayName,
     phoneNumber: userId,
-    avatarURL: null,
-    reputation: 0,
-    reliabilityPercent: 100,
+    avatarURL: profileSource.avatarURL,
+    reputation: profileSource.reputation,
+    reliabilityPercent: profileSource.reliabilityPercent,
     observerMode: profileSource.role !== "owner" && profileSource.status !== "active",
     status: profileSource.status,
   };
@@ -74,10 +77,13 @@ export async function profileRoutes(app: FastifyInstance) {
     const userId = request.user!.userId;
     const body = patchProfileBodySchema.parse(request.body);
 
-    if (body.displayName) {
+    if (body.displayName || body.avatarURL) {
       await db
         .update(groupMembers)
-        .set({ displayName: body.displayName })
+        .set({
+          ...(body.displayName ? { displayName: body.displayName } : {}),
+          ...(body.avatarURL ? { avatarUrl: body.avatarURL } : {}),
+        })
         .where(eq(groupMembers.externalUserId, userId));
     }
 

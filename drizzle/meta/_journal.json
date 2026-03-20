@@ -57,6 +57,13 @@
       "when": 1773711504294,
       "tag": "0007_freezing_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774005364912,
+      "tag": "0008_conscious_dark_phoenix",
+      "breakpoints": true
     }
   ]
 }

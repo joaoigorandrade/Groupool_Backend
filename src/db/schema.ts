@@ -44,14 +44,47 @@ export const groupMembers = pgTable(
       .references(() => groups.id, { onDelete: "cascade" }),
     externalUserId: text("external_user_id").notNull(),
     displayName: text("display_name").notNull(),
+    avatarUrl: text("avatar_url"),
+    reputation: integer("reputation").notNull().default(0),
+    reliabilityPercent: integer("reliability_percent").notNull().default(100),
     role: text("role").notNull(),
     status: text("status").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("group_members_group_user_unique").on(table.groupId, table.externalUserId),
+    check("group_members_reputation_check", sql`${table.reputation} >= 0`),
+    check(
+      "group_members_reliability_percent_check",
+      sql`${table.reliabilityPercent} between 0 and 100`,
+    ),
     check("group_members_role_check", sql`${table.role} in ('owner', 'member')`),
     check("group_members_status_check", sql`${table.status} in ('active', 'invited', 'removed')`),
+  ],
+);
+
+export const memberBalances = pgTable(
+  "member_balances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => groupMembers.id, { onDelete: "cascade" }),
+    availableCents: integer("available_cents").notNull().default(0),
+    frozenCents: integer("frozen_cents").notNull().default(0),
+    debtCents: integer("debt_cents").notNull().default(0),
+    status: text("status").notNull().default("ok"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("member_balances_group_member_unique").on(table.groupId, table.memberId),
+    check("member_balances_available_cents_check", sql`${table.availableCents} >= 0`),
+    check("member_balances_frozen_cents_check", sql`${table.frozenCents} >= 0`),
+    check("member_balances_debt_cents_check", sql`${table.debtCents} >= 0`),
+    check("member_balances_status_check", sql`${table.status} in ('ok', 'restricted', 'observer')`),
   ],
 );
 
@@ -133,5 +166,38 @@ export const contributions = pgTable(
     check("contributions_status_check", sql`${table.status} in ('pending', 'confirmed', 'failed')`),
     index("contributions_pool_id_idx").on(table.poolId),
     index("contributions_member_id_idx").on(table.memberId),
+  ],
+);
+
+export const challenges = pgTable(
+  "challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    creatorMemberId: uuid("creator_member_id")
+      .notNull()
+      .references(() => groupMembers.id, { onDelete: "cascade" }),
+    challengedMemberId: uuid("challenged_member_id")
+      .notNull()
+      .references(() => groupMembers.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    details: text("details"),
+    stakeCents: integer("stake_cents").notNull(),
+    status: text("status").notNull(),
+    eventDeadline: timestamp("event_deadline", { withTimezone: true }).notNull(),
+    voteDeadline: timestamp("vote_deadline", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("challenges_title_length_check", sql`char_length(${table.title}) between 1 and 160`),
+    check("challenges_stake_cents_check", sql`${table.stakeCents} >= 0`),
+    check(
+      "challenges_status_check",
+      sql`${table.status} in ('pending', 'active', 'voting', 'resolved', 'voided', 'cancelled')`,
+    ),
+    index("challenges_group_id_idx").on(table.groupId),
+    index("challenges_status_idx").on(table.status),
   ],
 );

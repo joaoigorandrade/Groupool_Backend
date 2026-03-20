@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "verify:dashboard": "tsx src/scripts/verify-dashboard.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

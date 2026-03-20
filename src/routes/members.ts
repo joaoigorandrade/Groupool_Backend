@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { groupMembers } from "../db/schema.js";
+import { groupMembers, memberBalances } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { requireGroupMember } from "../middleware/requireGroupMember.js";
 
@@ -80,17 +80,37 @@ export async function memberRoutes(app: FastifyInstance) {
       const { id: groupId } = groupIdParamsSchema.parse(request.params);
       const userId = request.user!.userId;
 
-      const [updated] = await db
-        .update(groupMembers)
-        .set({ status: "active" })
-        .where(
-          and(
-            eq(groupMembers.groupId, groupId),
-            eq(groupMembers.externalUserId, userId),
-            eq(groupMembers.status, "invited"),
-          ),
-        )
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [member] = await tx
+          .update(groupMembers)
+          .set({ status: "active" })
+          .where(
+            and(
+              eq(groupMembers.groupId, groupId),
+              eq(groupMembers.externalUserId, userId),
+              eq(groupMembers.status, "invited"),
+            ),
+          )
+          .returning();
+
+        if (!member) {
+          return null;
+        }
+
+        await tx
+          .insert(memberBalances)
+          .values({
+            groupId,
+            memberId: member.id,
+            availableCents: 0,
+            status: "ok",
+          })
+          .onConflictDoNothing({
+            target: [memberBalances.groupId, memberBalances.memberId],
+          });
+
+        return member;
+      });
 
       if (!updated) {
         return reply.status(404).send({

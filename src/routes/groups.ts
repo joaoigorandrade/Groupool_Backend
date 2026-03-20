@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { groupMembers, groups, idempotencyKeys } from "../db/schema.js";
+import { groupMembers, groups, idempotencyKeys, memberBalances } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { requireGroupMember } from "../middleware/requireGroupMember.js";
 
@@ -61,6 +61,15 @@ function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
       status: member.status,
       joinedAt: member.joinedAt,
     })),
+  };
+}
+
+function zeroBalance() {
+  return {
+    availableCents: 0,
+    frozenCents: 0,
+    debtCents: 0,
+    status: "ok" as const,
   };
 }
 
@@ -169,6 +178,13 @@ export async function groupRoutes(app: FastifyInstance) {
         throw new Error("Failed to create creator member");
       }
 
+      await tx.insert(memberBalances).values({
+        groupId: group.id,
+        memberId: creatorMember.id,
+        availableCents: 0,
+        status: "ok",
+      });
+
       if (typeof idempotencyKey === "string" && idempotencyKey.length > 0) {
         await tx.insert(idempotencyKeys).values({
           key: idempotencyKey,
@@ -216,28 +232,23 @@ export async function groupRoutes(app: FastifyInstance) {
     preHandler: [requireGroupMember],
   }, async (request, reply) => {
     const params = groupParamsSchema.parse(request.params);
-
-    const [group] = await db
+    const [balanceRow] = await db
       .select({
-        initialPoolCents: groups.initialPoolCents,
+        availableCents: memberBalances.availableCents,
+        frozenCents: memberBalances.frozenCents,
+        debtCents: memberBalances.debtCents,
+        status: memberBalances.status,
       })
-      .from(groups)
-      .where(eq(groups.id, params.groupId))
+      .from(memberBalances)
+      .where(
+        and(
+          eq(memberBalances.groupId, params.groupId),
+          eq(memberBalances.memberId, request.groupMember!.id),
+        ),
+      )
       .limit(1);
 
-    if (!group) {
-      return reply.status(404).send({
-        error: "not_found",
-        message: "Group not found",
-      });
-    }
-
-    return reply.status(200).send({
-      availableCents: group.initialPoolCents,
-      frozenCents: 0,
-      debtCents: 0,
-      status: "active",
-    });
+    return reply.status(200).send(balanceRow ?? zeroBalance());
   });
 
   app.delete("/groups/:groupId", {
