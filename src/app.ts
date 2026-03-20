@@ -9,7 +9,10 @@ import { groupRoutes } from "./routes/groups.js";
 import { healthRoutes } from "./routes/health.js";
 import { homeRoutes } from "./routes/home.js";
 import { memberRoutes } from "./routes/members.js";
+import { contributionRoutes } from "./routes/contributions.js";
 import { poolRoutes } from "./routes/pools.js";
+import { profileRoutes } from "./routes/profile.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -87,6 +90,9 @@ export function buildApp() {
       protectedApp.register(groupRoutes, { prefix: "/v1" });
       protectedApp.register(memberRoutes, { prefix: "/v1" });
       protectedApp.register(poolRoutes, { prefix: "/v1" });
+      protectedApp.register(contributionRoutes, { prefix: "/v1" });
+      protectedApp.register(profileRoutes, { prefix: "/v1" });
+      protectedApp.register(dashboardRoutes, { prefix: "/v1" });
     },
   );
 

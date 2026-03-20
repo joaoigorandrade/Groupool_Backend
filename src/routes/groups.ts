@@ -212,6 +212,34 @@ export async function groupRoutes(app: FastifyInstance) {
     return toGroupResponse(group, members);
   });
 
+  app.get("/groups/:groupId/balance", {
+    preHandler: [requireGroupMember],
+  }, async (request, reply) => {
+    const params = groupParamsSchema.parse(request.params);
+
+    const [group] = await db
+      .select({
+        initialPoolCents: groups.initialPoolCents,
+      })
+      .from(groups)
+      .where(eq(groups.id, params.groupId))
+      .limit(1);
+
+    if (!group) {
+      return reply.status(404).send({
+        error: "not_found",
+        message: "Group not found",
+      });
+    }
+
+    return reply.status(200).send({
+      availableCents: group.initialPoolCents,
+      frozenCents: 0,
+      debtCents: 0,
+      status: "active",
+    });
+  });
+
   app.delete("/groups/:groupId", {
     preHandler: [authenticate, requireGroupMember],
   }, async (request, reply) => {
