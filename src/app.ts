@@ -12,6 +12,7 @@ import { memberRoutes } from "./routes/members.js";
 import { contributionRoutes } from "./routes/contributions.js";
 import { poolRoutes } from "./routes/pools.js";
 import { profileRoutes } from "./routes/profile.js";
+import { inviteRoutes } from "./routes/invites.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 
 export function buildApp() {
@@ -92,6 +93,7 @@ export function buildApp() {
       protectedApp.register(poolRoutes, { prefix: "/v1" });
       protectedApp.register(contributionRoutes, { prefix: "/v1" });
       protectedApp.register(profileRoutes, { prefix: "/v1" });
+      protectedApp.register(inviteRoutes, { prefix: "/v1" });
       protectedApp.register(dashboardRoutes, { prefix: "/v1" });
     },
   );

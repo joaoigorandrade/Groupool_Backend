@@ -58,8 +58,7 @@ export const dashboardResponseSchema = z.object({
     avatarURL: z.string().nullable(),
     reputation: z.number().int(),
     reliabilityPercent: z.number().int(),
-    observerMode: z.boolean(),
-    status: z.string(),
+    profileSetupComplete: z.boolean(),
   }),
   challenges: z.array(challengeResponseSchema),
 });

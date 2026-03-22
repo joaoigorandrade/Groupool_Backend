@@ -11,6 +11,12 @@ const createGroupBodySchema = z.object({
   currency: z.literal("BRL"),
   initialPoolCents: z.number().int().min(0),
   creatorDisplayName: z.string().trim().min(1).max(80),
+  maxMembers: z.number().int().min(3).max(50).default(50),
+  withdrawalFastTrackCents: z.number().int().min(0).optional(),
+  voteWindowHours: z.number().int().min(6).max(72).default(24),
+  challengeCooldownHours: z.number().int().min(12).max(168).default(48),
+  withdrawalVoteTimeoutHours: z.number().int().min(12).max(168).default(48),
+  rules: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
 });
 
 const groupParamsSchema = z.object({
@@ -52,6 +58,12 @@ function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
     name: group.name,
     currency: group.currency,
     initialPoolCents: group.initialPoolCents,
+    maxMembers: group.maxMembers,
+    withdrawalFastTrackCents: group.withdrawalFastTrackCents,
+    voteWindowHours: group.voteWindowHours,
+    challengeCooldownHours: group.challengeCooldownHours,
+    withdrawalVoteTimeoutHours: group.withdrawalVoteTimeoutHours,
+    rules: group.rules,
     createdAt: group.createdAt,
     members: members.map((member) => ({
       id: member.id,
@@ -156,6 +168,12 @@ export async function groupRoutes(app: FastifyInstance) {
           name: body.name.trim(),
           currency: body.currency,
           initialPoolCents: body.initialPoolCents,
+          maxMembers: body.maxMembers,
+          withdrawalFastTrackCents: body.withdrawalFastTrackCents ?? null,
+          voteWindowHours: body.voteWindowHours,
+          challengeCooldownHours: body.challengeCooldownHours,
+          withdrawalVoteTimeoutHours: body.withdrawalVoteTimeoutHours,
+          rules: body.rules,
         })
         .returning();
 

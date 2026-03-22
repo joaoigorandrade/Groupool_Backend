@@ -11,6 +11,23 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    phone: text("phone").notNull().unique(),
+    displayName: text("display_name").notNull().default(""),
+    avatarUrl: text("avatar_url"),
+    tokenGeneration: integer("token_generation").notNull().default(1),
+    profileSetupComplete: boolean("profile_setup_complete").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("users_phone_idx").on(table.phone),
+  ],
+);
+
 export const groups = pgTable(
   "groups",
   {
@@ -18,12 +35,22 @@ export const groups = pgTable(
     name: text("name").notNull(),
     currency: text("currency").notNull(),
     initialPoolCents: integer("initial_pool_cents").notNull(),
+    maxMembers: integer("max_members").notNull().default(50),
+    withdrawalFastTrackCents: integer("withdrawal_fast_track_cents"),
+    voteWindowHours: integer("vote_window_hours").notNull().default(24),
+    challengeCooldownHours: integer("challenge_cooldown_hours").notNull().default(48),
+    withdrawalVoteTimeoutHours: integer("withdrawal_vote_timeout_hours").notNull().default(48),
+    rules: text("rules").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     check("groups_name_length_check", sql`char_length(${table.name}) between 1 and 80`),
     check("groups_currency_check", sql`${table.currency} = 'BRL'`),
     check("groups_initial_pool_cents_check", sql`${table.initialPoolCents} >= 0`),
+    check("groups_max_members_check", sql`${table.maxMembers} between 3 and 50`),
+    check("groups_vote_window_hours_check", sql`${table.voteWindowHours} between 6 and 72`),
+    check("groups_challenge_cooldown_hours_check", sql`${table.challengeCooldownHours} between 12 and 168`),
+    check("groups_withdrawal_vote_timeout_hours_check", sql`${table.withdrawalVoteTimeoutHours} between 12 and 168`),
   ],
 );
 
@@ -199,5 +226,29 @@ export const challenges = pgTable(
     ),
     index("challenges_group_id_idx").on(table.groupId),
     index("challenges_status_idx").on(table.status),
+  ],
+);
+
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code: text("code").notNull().unique(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    inviterMemberId: uuid("inviter_member_id")
+      .notNull()
+      .references(() => groupMembers.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    maxUses: integer("max_uses"),
+    useCount: integer("use_count").notNull().default(0),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("invites_status_check", sql`${table.status} in ('active', 'revoked', 'expired')`),
+    index("invites_code_idx").on(table.code),
+    index("invites_group_id_idx").on(table.groupId),
   ],
 );

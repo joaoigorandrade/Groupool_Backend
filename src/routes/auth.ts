@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { otpCodes, otpLocks, otpRequests } from "../db/schema.js";
+import { otpCodes, otpLocks, otpRequests, users } from "../db/schema.js";
 import { env } from "../config/env.js";
 import { signJwt } from "../services/jwt.js";
 import { sendOtpWhatsapp } from "../services/whatsapp.js";
@@ -199,9 +199,31 @@ export async function authRoutes(app: FastifyInstance) {
       .delete(otpLocks)
       .where(eq(otpLocks.phone, phoneNumber));
 
-    const userId = phoneNumber;
-    const displayName = "";
-    const token = signJwt(userId, displayName);
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.phone, phoneNumber))
+      .limit(1);
+
+    let tokenGeneration: number;
+    let displayName: string;
+
+    if (existingUser) {
+      tokenGeneration = existingUser.tokenGeneration + 1;
+      displayName = existingUser.displayName;
+      await db
+        .update(users)
+        .set({ tokenGeneration, updatedAt: new Date() })
+        .where(eq(users.phone, phoneNumber));
+    } else {
+      tokenGeneration = 1;
+      displayName = "";
+      await db
+        .insert(users)
+        .values({ phone: phoneNumber, tokenGeneration });
+    }
+
+    const token = signJwt(phoneNumber, displayName, tokenGeneration);
 
     return reply.status(200).send({ token });
   });

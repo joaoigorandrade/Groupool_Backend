@@ -10,7 +10,7 @@ async function main() {
   const app = buildApp();
   const suffix = Date.now().toString();
   const phoneNumber = `+5511999${suffix.slice(-7)}`;
-  const token = signJwt(phoneNumber, "");
+  const token = signJwt(phoneNumber, "", 1);
   const headers = {
     authorization: `Bearer ${token}`,
   };

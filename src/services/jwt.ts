@@ -5,12 +5,13 @@ interface JwtPayload {
   sub: string;
   exp: number;
   iat: number;
+  gen: number;
   user_metadata: {
     display_name: string;
   };
 }
 
-export function signJwt(userId: string, displayName: string): string {
+export function signJwt(userId: string, displayName: string, tokenGeneration: number): string {
   const now = Math.floor(Date.now() / 1000);
   const expiresIn = 60 * 60 * 24 * 30; // 30 days
 
@@ -20,6 +21,7 @@ export function signJwt(userId: string, displayName: string): string {
     sub: userId,
     iat: now,
     exp: now + expiresIn,
+    gen: tokenGeneration,
     user_metadata: {
       display_name: displayName,
     },

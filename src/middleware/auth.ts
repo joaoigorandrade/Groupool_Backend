@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../config/env.js";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
 
 export interface AuthUser {
   userId: string;
@@ -16,6 +19,7 @@ declare module "fastify" {
 interface JwtPayload {
   sub: string;
   exp?: number;
+  gen?: number;
   user_metadata?: {
     display_name?: string;
     name?: string;
@@ -74,6 +78,21 @@ export async function authenticate(
   try {
     const payload = verifyJwt(token);
     const meta = payload.user_metadata ?? {};
+
+    if (payload.gen !== undefined) {
+      const [user] = await db
+        .select({ tokenGeneration: users.tokenGeneration })
+        .from(users)
+        .where(eq(users.phone, payload.sub))
+        .limit(1);
+
+      if (user && payload.gen < user.tokenGeneration) {
+        return reply.status(401).send({
+          error: "session_expired",
+          message: "Session expired — you logged in on another device.",
+        });
+      }
+    }
 
     request.user = {
       userId: payload.sub,
