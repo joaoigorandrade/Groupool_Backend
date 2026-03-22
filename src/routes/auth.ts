@@ -35,42 +35,44 @@ function isDevEnvironment(): boolean {
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/send-otp", {
-    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    config: { rateLimit: isDevEnvironment() ? { max: 1000, timeWindow: "1 minute" } : { max: 10, timeWindow: "1 minute" } },
   }, async (request, reply) => {
     const { phoneNumber } = sendOtpBodySchema.parse(request.body);
     const ip = request.ip;
 
-    const [lock] = await db
-      .select()
-      .from(otpLocks)
-      .where(eq(otpLocks.phone, phoneNumber))
-      .limit(1);
+    if (!isDevEnvironment()) {
+      const [lock] = await db
+        .select()
+        .from(otpLocks)
+        .where(eq(otpLocks.phone, phoneNumber))
+        .limit(1);
 
-    if (lock && lock.lockedUntil > new Date()) {
-      const remainingMs = lock.lockedUntil.getTime() - Date.now();
-      const remainingMin = Math.ceil(remainingMs / 60000);
-      return reply.status(429).send({
-        error: "locked",
-        message: `Too many incorrect attempts. This number is locked for ${remainingMin} minutes.`,
-      });
-    }
+      if (lock && lock.lockedUntil > new Date()) {
+        const remainingMs = lock.lockedUntil.getTime() - Date.now();
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return reply.status(429).send({
+          error: "locked",
+          message: `Too many incorrect attempts. This number is locked for ${remainingMin} minutes.`,
+        });
+      }
 
-    const windowStart = new Date(Date.now() - REQUEST_WINDOW_MINUTES * 60 * 1000);
-    const [requestCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(otpRequests)
-      .where(
-        and(
-          eq(otpRequests.phone, phoneNumber),
-          gt(otpRequests.createdAt, windowStart),
-        ),
-      );
+      const windowStart = new Date(Date.now() - REQUEST_WINDOW_MINUTES * 60 * 1000);
+      const [requestCount] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(otpRequests)
+        .where(
+          and(
+            eq(otpRequests.phone, phoneNumber),
+            gt(otpRequests.createdAt, windowStart),
+          ),
+        );
 
-    if (requestCount && requestCount.count >= MAX_REQUESTS_PER_WINDOW) {
-      return reply.status(429).send({
-        error: "rate_limit",
-        message: `Too many code requests. Please try again in ${REQUEST_WINDOW_MINUTES} minutes.`,
-      });
+      if (requestCount && requestCount.count >= MAX_REQUESTS_PER_WINDOW) {
+        return reply.status(429).send({
+          error: "rate_limit",
+          message: `Too many code requests. Please try again in ${REQUEST_WINDOW_MINUTES} minutes.`,
+        });
+      }
     }
 
     await db.insert(otpRequests).values({ phone: phoneNumber, ip });
@@ -100,23 +102,29 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/auth/verify-otp", {
-    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    config: { rateLimit: isDevEnvironment() ? { max: 1000, timeWindow: "1 minute" } : { max: 10, timeWindow: "1 minute" } },
   }, async (request, reply) => {
     const { phoneNumber, code } = verifyOtpBodySchema.parse(request.body);
 
-    const [lock] = await db
-      .select()
-      .from(otpLocks)
-      .where(eq(otpLocks.phone, phoneNumber))
-      .limit(1);
+    let lock: typeof otpLocks.$inferSelect | undefined;
 
-    if (lock && lock.lockedUntil > new Date()) {
-      const remainingMs = lock.lockedUntil.getTime() - Date.now();
-      const remainingMin = Math.ceil(remainingMs / 60000);
-      return reply.status(429).send({
-        error: "locked",
-        message: `Too many incorrect attempts. This number is locked for ${remainingMin} minutes.`,
-      });
+    if (!isDevEnvironment()) {
+      const [existingLock] = await db
+        .select()
+        .from(otpLocks)
+        .where(eq(otpLocks.phone, phoneNumber))
+        .limit(1);
+
+      lock = existingLock;
+
+      if (lock && lock.lockedUntil > new Date()) {
+        const remainingMs = lock.lockedUntil.getTime() - Date.now();
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return reply.status(429).send({
+          error: "locked",
+          message: `Too many incorrect attempts. This number is locked for ${remainingMin} minutes.`,
+        });
+      }
     }
 
     let verified = false;
@@ -148,36 +156,38 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     if (!verified) {
-      const currentFailCount = lock?.failCount ?? 0;
-      const newFailCount = currentFailCount + 1;
+      if (!isDevEnvironment()) {
+        const currentFailCount = lock?.failCount ?? 0;
+        const newFailCount = currentFailCount + 1;
 
-      if (newFailCount >= MAX_FAILED_ATTEMPTS) {
-        const lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000);
+        if (newFailCount >= MAX_FAILED_ATTEMPTS) {
+          const lockedUntil = new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000);
+          await db
+            .insert(otpLocks)
+            .values({ phone: phoneNumber, lockedUntil, failCount: newFailCount })
+            .onConflictDoUpdate({
+              target: otpLocks.phone,
+              set: { lockedUntil, failCount: newFailCount },
+            });
+
+          return reply.status(429).send({
+            error: "locked",
+            message: `Too many incorrect attempts. This number is locked for ${LOCK_DURATION_MINUTES} minutes.`,
+          });
+        }
+
         await db
           .insert(otpLocks)
-          .values({ phone: phoneNumber, lockedUntil, failCount: newFailCount })
+          .values({
+            phone: phoneNumber,
+            lockedUntil: new Date(0),
+            failCount: newFailCount,
+          })
           .onConflictDoUpdate({
             target: otpLocks.phone,
-            set: { lockedUntil, failCount: newFailCount },
+            set: { failCount: newFailCount },
           });
-
-        return reply.status(429).send({
-          error: "locked",
-          message: `Too many incorrect attempts. This number is locked for ${LOCK_DURATION_MINUTES} minutes.`,
-        });
       }
-
-      await db
-        .insert(otpLocks)
-        .values({
-          phone: phoneNumber,
-          lockedUntil: new Date(0),
-          failCount: newFailCount,
-        })
-        .onConflictDoUpdate({
-          target: otpLocks.phone,
-          set: { failCount: newFailCount },
-        });
 
       return reply.status(401).send({
         error: "invalid_code",
