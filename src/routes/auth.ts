@@ -207,15 +207,21 @@ export async function authRoutes(app: FastifyInstance) {
 
     let tokenGeneration: number;
     let displayName: string;
+    let avatarURL: string | null = null;
+    let profileSetupComplete = false;
+    let isNewUser = false;
 
     if (existingUser) {
       tokenGeneration = existingUser.tokenGeneration + 1;
       displayName = existingUser.displayName;
+      avatarURL = existingUser.avatarUrl;
+      profileSetupComplete = existingUser.profileSetupComplete;
       await db
         .update(users)
         .set({ tokenGeneration, updatedAt: new Date() })
         .where(eq(users.phone, phoneNumber));
     } else {
+      isNewUser = true;
       tokenGeneration = 1;
       displayName = "";
       await db
@@ -225,6 +231,12 @@ export async function authRoutes(app: FastifyInstance) {
 
     const token = signJwt(phoneNumber, displayName, tokenGeneration);
 
-    return reply.status(200).send({ token });
+    return reply.status(200).send({
+      token,
+      isNewUser,
+      profileSetupComplete,
+      displayName: displayName || null,
+      avatarURL,
+    });
   });
 }

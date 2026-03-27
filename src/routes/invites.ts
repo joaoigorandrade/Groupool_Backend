@@ -6,6 +6,7 @@ import { db } from "../db/index.js";
 import { groupMembers, groups, invites, memberBalances, users } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { requireGroupMember } from "../middleware/requireGroupMember.js";
+import { toGroupResponse } from "./groups.js";
 
 const INVITE_EXPIRY_DAYS = 7;
 const CODE_LENGTH = 6;
@@ -136,20 +137,6 @@ export async function inviteRoutes(app: FastifyInstance) {
         });
       }
 
-      if (invite.expiresAt < new Date()) {
-        return reply.status(410).send({
-          error: "expired",
-          message: "This invite link has expired",
-        });
-      }
-
-      if (invite.maxUses !== null && invite.useCount >= invite.maxUses) {
-        return reply.status(410).send({
-          error: "exhausted",
-          message: "This invite link has reached its maximum number of uses",
-        });
-      }
-
       const [group] = await db
         .select()
         .from(groups)
@@ -160,23 +147,6 @@ export async function inviteRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           error: "not_found",
           message: "The group associated with this invite no longer exists",
-        });
-      }
-
-      const [activeMemberCount] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(groupMembers)
-        .where(
-          and(
-            eq(groupMembers.groupId, group.id),
-            eq(groupMembers.status, "active"),
-          ),
-        );
-
-      if (activeMemberCount && activeMemberCount.count >= group.maxMembers) {
-        return reply.status(410).send({
-          error: "group_full",
-          message: "This group has reached its maximum number of members",
         });
       }
 
@@ -367,23 +337,7 @@ export async function inviteRoutes(app: FastifyInstance) {
         .from(groupMembers)
         .where(eq(groupMembers.groupId, group.id));
 
-      return reply.status(200).send({
-        id: group.id,
-        name: group.name,
-        currency: group.currency,
-        initialPoolCents: group.initialPoolCents,
-        maxMembers: group.maxMembers,
-        rules: group.rules,
-        createdAt: group.createdAt,
-        members: allMembers.map((m) => ({
-          id: m.id,
-          externalUserId: m.externalUserId,
-          displayName: m.displayName,
-          role: m.role,
-          status: m.status,
-          joinedAt: m.joinedAt,
-        })),
-      });
+      return reply.status(200).send(toGroupResponse(group, allMembers));
     },
   );
 }

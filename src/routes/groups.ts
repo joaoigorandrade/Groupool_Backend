@@ -1,10 +1,23 @@
+import { randomBytes } from "node:crypto";
 import { FastifyInstance } from "fastify";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { groupMembers, groups, idempotencyKeys, memberBalances } from "../db/schema.js";
+import { groupMembers, groups, idempotencyKeys, invites, memberBalances } from "../db/schema.js";
 import { authenticate } from "../middleware/auth.js";
 import { requireGroupMember } from "../middleware/requireGroupMember.js";
+
+const INVITE_EXPIRY_DAYS = 7;
+
+function generateInviteCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(6);
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[bytes[i]! % chars.length];
+  }
+  return code;
+}
 
 const createGroupBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -52,7 +65,7 @@ function decodeCursor(cursor: string): GroupCursor {
 type GroupRecord = typeof groups.$inferSelect;
 type GroupMemberRecord = typeof groupMembers.$inferSelect;
 
-function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
+export function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
   return {
     id: group.id,
     name: group.name,
@@ -71,6 +84,7 @@ function toGroupResponse(group: GroupRecord, members: GroupMemberRecord[]) {
       displayName: member.displayName,
       role: member.role,
       status: member.status,
+      avatarURL: member.avatarUrl,
       joinedAt: member.joinedAt,
     })),
   };
@@ -156,9 +170,27 @@ export async function groupRoutes(app: FastifyInstance) {
             .from(groupMembers)
             .where(eq(groupMembers.groupId, existingGroup.id));
 
-          return reply.status(200).send(toGroupResponse(existingGroup, members));
+          const [existingInvite] = await db
+            .select()
+            .from(invites)
+            .where(and(eq(invites.groupId, existingGroup.id), eq(invites.status, "active")))
+            .limit(1);
+
+          return reply.status(200).send({
+            ...toGroupResponse(existingGroup, members),
+            invite: existingInvite
+              ? { code: existingInvite.code, inviteUrl: `groupool.app/join/${existingInvite.code}`, expiresAt: existingInvite.expiresAt }
+              : null,
+          });
         }
       }
+    }
+
+    let inviteCode = generateInviteCode();
+    for (let attempts = 0; attempts < 5; attempts++) {
+      const [existing] = await db.select({ id: invites.id }).from(invites).where(eq(invites.code, inviteCode)).limit(1);
+      if (!existing) break;
+      inviteCode = generateInviteCode();
     }
 
     const result = await db.transaction(async (tx) => {
@@ -203,6 +235,22 @@ export async function groupRoutes(app: FastifyInstance) {
         status: "ok",
       });
 
+      const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+      const [invite] = await tx
+        .insert(invites)
+        .values({
+          code: inviteCode,
+          groupId: group.id,
+          inviterMemberId: creatorMember.id,
+          expiresAt,
+          maxUses: null,
+        })
+        .returning();
+
+      if (!invite) {
+        throw new Error("Failed to create invite");
+      }
+
       if (typeof idempotencyKey === "string" && idempotencyKey.length > 0) {
         await tx.insert(idempotencyKeys).values({
           key: idempotencyKey,
@@ -214,10 +262,18 @@ export async function groupRoutes(app: FastifyInstance) {
       return {
         group,
         members: [creatorMember],
+        invite,
       };
     });
 
-    return reply.status(201).send(toGroupResponse(result.group, result.members));
+    return reply.status(201).send({
+      ...toGroupResponse(result.group, result.members),
+      invite: {
+        code: result.invite.code,
+        inviteUrl: `groupool.app/join/${result.invite.code}`,
+        expiresAt: result.invite.expiresAt,
+      },
+    });
   });
 
   app.get("/groups/:groupId", {
